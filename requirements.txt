@@ -1,8 +1,7 @@
-flask
-supabase
-torch
-torchvision
-transformers
-Pillow
-requests
-scikit-learn
+Flask==2.3.2
+supabase==0.3.0
+torch==2.0.1
+transformers==4.31.0
+Pillow==9.4.0
+requests==2.31.0
+scikit-learn==1.2.2
