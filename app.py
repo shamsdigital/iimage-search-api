@@ -7,27 +7,24 @@ from transformers import CLIPProcessor, CLIPModel
 from PIL import Image
 import requests
 from io import BytesIO
-import os
-import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+import os
 import ast
 
-# Initialize Flask app
 app = Flask(__name__)
 
-# Initialize Supabase client using environment variables
+# Access environment variables for Supabase credentials
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_API_KEY = os.getenv('SUPABASE_API_KEY')
+
+# Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 
 # Load CLIP model and processor
 model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
 processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
-# Move model to appropriate device (CPU or GPU)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.to(device)
-model.eval()
 
 def get_image_embedding(image_url):
     """
@@ -43,109 +40,76 @@ def get_image_embedding(image_url):
 
     # Process the image and get embeddings
     inputs = processor(images=image, return_tensors="pt")
-    inputs = {k: v.to(device) for k, v in inputs.items()}  # Move to device
-
     with torch.no_grad():
         outputs = model.get_image_features(**inputs)
 
-    # Normalize the embedding
+    # Convert to CPU and detach from the computation graph
     embedding = outputs[0].cpu().numpy().tolist()
     return embedding
 
-def search_image(input_image_url, threshold=0.8, top_n=5):
+
+@app.route('/search-image', methods=['POST'])
+def search_image():
     """
     Searches for images in the 'images' table that are similar to the input image.
-
-    Parameters:
-        input_image_url (str): The URL of the image to search.
-        threshold (float): The cosine similarity threshold to consider a match.
-        top_n (int): Number of top similar images to return.
-
-    Returns:
-        list: A list of tuples containing matching image URLs and their corresponding user_ids.
     """
+    data = request.json
+    input_image_url = data.get('image_url')
+    threshold = data.get('threshold', 0.9)
+
+    if not input_image_url:
+        return jsonify({"error": "No image URL provided"}), 400
+
     # Generate embedding for the input image
     input_embedding = get_image_embedding(input_image_url)
     if input_embedding is None:
-        print("Failed to generate embedding for the input image.")
-        return []
+        return jsonify({"error": "Failed to generate embedding for the input image."}), 500
 
     # Fetch all images and their embeddings from Supabase
     try:
         response = supabase.table("images").select("image_url, embedding, user_id").execute()
+
+        if not response.data:
+            return jsonify({"error": "No images found in the database."}), 404
+
         images_data = response.data
     except Exception as e:
-        print(f"An error occurred while fetching data: {e}")
-        return []
+        return jsonify({"error": f"An error occurred while fetching data: {e}"}), 500
 
-    if not images_data:
-        print("No images found in the database.")
-        return []
-
-    similarities = []
-
+    # Prepare embeddings for similarity computation
+    stored_embeddings = []
+    user_ids = []
     for image in images_data:
-        embedding_str = image.get('embedding')
-        user_id = image.get('user_id')
-        image_url = image.get('image_url')
-
-        if embedding_str is None:
-            print(f"Skipping image {image_url} due to None embedding.")
-            continue
-
+        embedding_str = image['embedding']
         try:
-            # Safely evaluate the embedding string to a list
+            # Safely evaluate the string to a Python list
             embedding = ast.literal_eval(embedding_str)
-            embedding = np.array(embedding, dtype=float)
-
-            # Ensure the embedding has the correct dimension
-            if embedding.shape[0] != 1024 or len(input_embedding) != 1024:
-                print(f"Unexpected embedding shape for image {image_url}: {embedding.shape}")
-                continue
-
-            # Calculate cosine similarity
-            similarity = cosine_similarity([input_embedding], [embedding])[0][0]
-            if similarity >= threshold:
-                similarities.append({
-                    "image_url": image_url,
-                    "user_id": user_id,
-                    "similarity_score": similarity
-                })
-
+            stored_embeddings.append(embedding)
+            user_ids.append(image['user_id'])  # Collect user_ids
         except Exception as e:
-            print(f"Error processing image {image_url}: {e}")
-            continue
+            print(f"Error parsing embedding for image {image['image_url']}: {e}")
+            continue  # Skip this image if embedding parsing fails
 
-    # Sort the results by similarity score in descending order
-    similarities.sort(key=lambda x: x['similarity_score'], reverse=True)
+    if not stored_embeddings:
+        return jsonify({"error": "No valid embeddings found in the database."}), 500
 
-    # Return top_n results
-    return similarities[:top_n]
+    stored_embeddings = np.array(stored_embeddings)
+    input_embedding_np = np.array(input_embedding).reshape(1, -1)
 
-@app.route('/search', methods=['POST'])
-def search_endpoint():
-    """
-    Endpoint to search for similar images.
-    Expects a JSON body with 'image_url' and optional 'threshold' and 'top_n'.
-    """
-    data = request.get_json()
+    # Compute cosine similarity
+    similarities = cosine_similarity(input_embedding_np, stored_embeddings)[0]
 
-    # Validate input
-    if not data or 'image_url' not in data:
-        return jsonify({"error": "Missing 'image_url' in request body."}), 400
+    # Find indices where similarity exceeds the threshold
+    matching_indices = np.where(similarities >= threshold)[0]
 
-    image_url = data['image_url']
-    threshold = data.get('threshold', 0.8)
-    top_n = data.get('top_n', 5)
+    if len(matching_indices) == 0:
+        return jsonify({"message": "Image not found."}), 404
 
-    # Perform the search
-    matching_images = search_image(image_url, threshold, top_n)
+    # Retrieve matching image URLs and corresponding user_ids
+    matching_images = [(images_data[i]['image_url'], user_ids[i]) for i in matching_indices]
 
-    if matching_images:
-        return jsonify({"matching_images": matching_images}), 200
-    else:
-        return jsonify({"message": "No similar images found."}), 404
+    return jsonify({"matching_images": matching_images}), 200
+
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(debug=False, host='0.0.0.0', port=port)
+    app.run(debug=True)
