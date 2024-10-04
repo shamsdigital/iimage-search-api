@@ -47,13 +47,11 @@ def get_image_embedding(image_url):
 
 @app.route('/search-image', methods=['POST'])
 def search_image():
-    """
-    Searches for images in the 'images' table that are similar to the input image.
-    Expected input: JSON with key 'image_url'.
-    """
+    return jsonify({"message": "Endpoint is working!"}), 200
+
     data = request.json
     input_image_url = data.get('image_url')
-    threshold = data.get('threshold', 0.8)  # Default threshold
+    threshold = data.get('threshold', 0.9)  # Default threshold
 
     if not input_image_url:
         return jsonify({'error': 'No image URL provided'}), 400
