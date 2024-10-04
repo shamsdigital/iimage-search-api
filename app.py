@@ -88,3 +88,7 @@ def search_image():
     matching_images = [(images_data[i]['image_url'], user_ids[i]) for i in matching_indices]
 
     return jsonify({"matching_images": matching_images}), 200
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
