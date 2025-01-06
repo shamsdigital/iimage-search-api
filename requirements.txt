@@ -6,4 +6,5 @@ Pillow
 requests
 scikit-learn
 Flask
+gunicorn  # Added gunicorn for production serving.
 python-dotenv
