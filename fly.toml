@@ -1,17 +1,23 @@
-app = "iimage-search-api"
+# fly.toml app configuration file generated for iimage-search-api on 2025-01-06T11:41:08Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'iimage-search-api'
+primary_region = 'sin'
 
 [build]
-  docker = { dockerfile = "Dockerfile" }
 
-[env]
-  SUPABASE_URL = "https://bpdgwtzndipaybatzcix.supabase.co"
-  SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwZGd3dHpuZGlwYXliYXR6Y2l4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzEyNzkxNDgsImV4cCI6MjA0Njg1NTE0OH0.Jan2VtasYMgsVXiAhbRdlyDC4ol_Ra9mB_eJ3uqUiKE"
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
 
-[[services]]
-  http_checks = []
-  internal_port = 5000
-  processes = ["app"]
-
-  [[services.ports]]
-    handlers = ["http"]
-    port = "80"
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 1024
