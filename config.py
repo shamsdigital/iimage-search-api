@@ -3,5 +3,5 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_API_KEY = os.getenv('SUPABASE_API_KEY')
+SUPABASE_URL = https://bpdgwtzndipaybatzcix.supabase.co
+SUPABASE_API_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwZGd3dHpuZGlwYXliYXR6Y2l4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzEyNzkxNDgsImV4cCI6MjA0Njg1NTE0OH0.Jan2VtasYMgsVXiAhbRdlyDC4ol_Ra9mB_eJ3uqUiKE
